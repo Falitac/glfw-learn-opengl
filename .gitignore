@@ -2,7 +2,7 @@
 *.obj
 *.dll
 build/*
-!build/assets/
+!build/assets/*
 !build/*.vert
 !build/*.frag
 !build/*.geom
