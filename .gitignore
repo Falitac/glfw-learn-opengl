@@ -1,11 +1,9 @@
 *.exe
 *.obj
 *.dll
-build/
-build/**/*
-!*.vert
-!*.frag
-!*.geom
+build/*
 !build/assets/
-!build/assets/**/*
+!build/*.vert
+!build/*.frag
+!build/*.geom
 
