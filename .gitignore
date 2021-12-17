@@ -1,0 +1,11 @@
+*.exe
+*.obj
+*.dll
+build/
+build/**/*
+!*.vert
+!*.frag
+!*.geom
+!build/assets/
+!build/assets/**/*
+
