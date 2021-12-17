@@ -1,0 +1,12 @@
+[
+{
+  "directory": "B:/code/cpp/glfw1/build",
+  "command": "C:\\msys64\\mingw64\\bin\\g++.exe   -g -std=gnu++20 -o CMakeFiles\\glfw1.dir\\src\\main.cpp.obj -c B:\\code\\cpp\\glfw1\\src\\main.cpp",
+  "file": "B:/code/cpp/glfw1/src/main.cpp"
+},
+{
+  "directory": "B:/code/cpp/glfw1/build",
+  "command": "C:\\msys64\\mingw64\\bin\\g++.exe   -g -std=gnu++20 -o CMakeFiles\\glfw1.dir\\src\\shader.cpp.obj -c B:\\code\\cpp\\glfw1\\src\\shader.cpp",
+  "file": "B:/code/cpp/glfw1/src/shader.cpp"
+}
+]
