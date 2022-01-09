@@ -14,8 +14,8 @@ private:
   std::map<std::string, GLuint> variableLocations;
   std::map<std::string, GLuint> uniformLocations;
 public:
-  Shader();
-  ~Shader();
+  Shader() = default;
+  Shader(const std::string& shaderName);
 
   GLuint getProgramID() const {
     return programID;
