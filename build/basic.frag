@@ -1,5 +1,5 @@
-#version 110
-varying vec3 color;
+#version 330 core
+in vec3 color;
 
 void main()
 {

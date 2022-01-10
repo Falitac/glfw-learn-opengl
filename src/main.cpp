@@ -19,11 +19,12 @@ static const struct
 {
     float x, y;
     float r, g, b;
+    float u, v;
 } vertices[3] =
 {
-    { -0.6f, -0.4f, 1.f, 0.f, 0.f },
-    {  0.6f, -0.4f, 0.f, 1.f, 0.f },
-    {   0.f,  0.6f, 0.f, 0.f, 1.f }
+    { -0.6f, -0.4f, 1.f, 0.f, 0.f, 0.0f, 1.0f },
+    {  0.6f, -0.4f, 0.f, 1.f, 0.f, 0.0f, 1.0f },
+    {   0.f,  0.6f, 0.f, 0.f, 1.f, 0.0f, 1.0f }
 };
 
 double scale = 1.0;
@@ -68,7 +69,6 @@ int main(void)
   };
   GLFWwindow* window;
   GLuint vertex_buffer;
-  GLint mvp_location, vpos_location, vcol_location;
 
   glfwSetErrorCallback(error_callback);
 
@@ -114,47 +114,67 @@ int main(void)
   glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
   glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-  Shader s("shader");
-  //s.compile("shader");
-  mvp_location = s.findUniformLocation("MVP");
-  vpos_location = s.findVarLocation("vPos");
-  vcol_location = s.findVarLocation("vCol");
+  Shader s("basic");
 
   GLuint VAO;
   glGenVertexArrays(1, &VAO);
   glBindVertexArray(VAO);
-  glEnableVertexAttribArray(vpos_location);
+  glEnableVertexAttribArray(s.findVarLocation("vPos"));
   glVertexAttribPointer(
-    vpos_location,
+    s.findVarLocation("vPos"),
     2,
     GL_FLOAT,
     GL_FALSE,
     sizeof(vertices[0]),
     nullptr
   );
-  glEnableVertexAttribArray(vcol_location);
+  glEnableVertexAttribArray(s.findVarLocation("vCol"));
   glVertexAttribPointer(
-    vcol_location,
+    s.findVarLocation("vCol"),
     3,
     GL_FLOAT,
     GL_FALSE,
     sizeof(vertices[0]),
     (void*) (sizeof(float) * 2)
   );
+  glEnableVertexAttribArray(s.findVarLocation("vUV"));
+  glVertexAttribPointer(
+    s.findVarLocation("vUV"),
+    2,
+    GL_FLOAT,
+    GL_FALSE,
+    sizeof(vertices[0]),
+    (void*) (sizeof(float) * 5)
+  );
 
   int width, height, channels;
-  auto img_data = stbi_load("flower-texture.jpg", &width, &height, &channels, 0);
+  auto img_data = stbi_load("assets/flower-texture.jpg", &width, &height, &channels, 0);
   if(!img_data) {
-    perror("couldn't load data");
+    std::perror("couldn't load data");
+  } else {
+    std::printf("IMG_WIDTH: %d\n", width);
+    std::printf("IMG_HEIGHT: %d\n", height);
+    std::printf("IMG_CHANNELS: %d\n", channels);
   }
+
+  GLuint texture1;
+  glGenTextures(1, &texture1);
+  glBindTexture(GL_TEXTURE_2D, texture1);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   while (!glfwWindowShouldClose(window))
   {
     double startTime = glfwGetTime();
 
     if(reloadShader) {
+      reloadShader = false;
       glDeleteProgram(s());
-      s = Shader("shader");
+      s = Shader("basic");
     }
     float ratio;
     int width, height;
@@ -191,7 +211,8 @@ int main(void)
 
 
     s.use();
-    glUniformMatrix4fv(mvp_location, 1, GL_FALSE, glm::value_ptr(mvp));
+    glBindTexture(GL_TEXTURE_2D, texture1);
+    glUniformMatrix4fv(s.findUniformLocation("MVP"), 1, GL_FALSE, glm::value_ptr(mvp));
     glDrawArrays(GL_TRIANGLES, 0, 3);
     //glErrorChecker(__LINE__);
 
@@ -203,5 +224,6 @@ int main(void)
 
   glfwTerminate();
   stbi_image_free(img_data);
+  glDeleteTextures(1, &texture1);
   exit(EXIT_SUCCESS);
 }

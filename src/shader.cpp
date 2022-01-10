@@ -3,6 +3,7 @@
 #include <string.h>
 #include <iostream>
 #include <array>
+#include <memory>
 
 Shader::Shader(const std::string& shaderName) {
   compile(shaderName);
@@ -16,7 +17,7 @@ std::string Shader::loadFromFileContent(const std::string& fileName) {
   if(file.good()) {
     s << file.rdbuf();
   } else {
-    throw FileNotFound();
+    throw FileNotFound(fileName);
   }
   return s.str();
 }
@@ -75,14 +76,12 @@ GLuint Shader::compileShader(const std::string& shaderName, GLenum shaderType) {
   glGetShaderiv(resultShader, GL_INFO_LOG_LENGTH, &errorLogSize);
 
   if(errorLogSize > 0) {
-    std::string errorMessage;
-    errorMessage.reserve(errorLogSize);
-    glGetShaderInfoLog(resultShader, errorMessage.size(), NULL, &errorMessage[0]);
+    auto errorMessage = std::make_unique<char[]>(errorLogSize);
+    glGetShaderInfoLog(resultShader, errorLogSize, NULL, errorMessage.get());
 
     std::fprintf(stderr, "Compiling %s error:\n", (shaderName + EXTENSIONS[fileExtensionID]).c_str());
-    std::fprintf(stderr, "%s\n", errorMessage.c_str());
+    std::fprintf(stderr, "%s\n", errorMessage.get());
   }
-
 
   return resultShader;
 }

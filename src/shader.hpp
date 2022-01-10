@@ -36,9 +36,15 @@ private:
   friend int main(void);
 
   class FileNotFound : public std::exception {
+    std::string fileName;
+
     public:
+    FileNotFound(const std::string& fileName)
+    : fileName(fileName) {
+    }
+
     virtual const char* what() {
-      return "That file does not exist!";
+      return std::string(fileName + " does not exist").c_str();
     }
   };
   class WrongShaderType : public std::exception {
