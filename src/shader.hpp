@@ -25,6 +25,10 @@ public:
   GLint findVarLocation(const std::string& varName);
   GLint findUniformLocation(const std::string& uniformName);
 
+  const inline GLuint operator()() const {
+    return programID;
+  }
+
 private:
   std::string loadFromFileContent(const std::string& shaderName);
   void compile(const std::string& shaderName);

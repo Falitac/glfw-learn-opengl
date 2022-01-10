@@ -12,6 +12,8 @@
 #include <stdio.h>
 
 #include "shader.hpp"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 static const struct
 {
@@ -26,6 +28,7 @@ static const struct
 
 double scale = 1.0;
 bool projectionSwitch = false;
+bool reloadShader = false;
 
 static void error_callback(int error, const char* description)
 {
@@ -47,6 +50,9 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
     if(key == GLFW_KEY_Q && action == GLFW_PRESS) {
       projectionSwitch ^= 1;
     }
+    if(key == GLFW_KEY_Z && action == GLFW_PRESS) {
+      reloadShader = true;
+    }
 }
 
 int main(void)
@@ -61,7 +67,7 @@ int main(void)
     }
   };
   GLFWwindow* window;
-  GLuint vertex_buffer, vertex_shader, fragment_shader, program;
+  GLuint vertex_buffer;
   GLint mvp_location, vpos_location, vcol_location;
 
   glfwSetErrorCallback(error_callback);
@@ -136,11 +142,20 @@ int main(void)
     (void*) (sizeof(float) * 2)
   );
 
+  int width, height, channels;
+  auto img_data = stbi_load("flower-texture.jpg", &width, &height, &channels, 0);
+  if(!img_data) {
+    perror("couldn't load data");
+  }
+
   while (!glfwWindowShouldClose(window))
   {
     double startTime = glfwGetTime();
-    //glfwSetWindowOpacity(window, 1.0f / (startTime*startTime + 0.01f));
-    //glfwSetWindowOpacity(window, 0.1f);
+
+    if(reloadShader) {
+      glDeleteProgram(s());
+      s = Shader("shader");
+    }
     float ratio;
     int width, height;
 
@@ -187,5 +202,6 @@ int main(void)
   glfwDestroyWindow(window);
 
   glfwTerminate();
+  stbi_image_free(img_data);
   exit(EXIT_SUCCESS);
 }

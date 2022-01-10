@@ -95,7 +95,7 @@ GLint Shader::findVarLocation(const std::string& varName) {
   return variableLocations[varName];
 }
 
-GLint  Shader::findUniformLocation(const std::string& uniformName) {
+GLint Shader::findUniformLocation(const std::string& uniformName) {
   if(!uniformLocations.contains(uniformName)) {
     auto id = glGetUniformLocation(programID, uniformName.c_str());
     variableLocations[uniformName] = id;
