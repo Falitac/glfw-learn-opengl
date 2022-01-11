@@ -2,7 +2,9 @@
 
 #include "shader.hpp"
 #include "texture.hpp"
+#include "Mesh.hpp"
 #include <map>
+#include <vector>
 #include <string>
 
 class AssetManager {

@@ -10,44 +10,48 @@
 #include <assimp/Importer.hpp>
 
 
-#include <stdlib.h>
-#include <stdio.h>
+#include <iostream>
+#include <cstdlib>
+#include <cstdio>
+#include <map>
 
 
 #include "shader.hpp"
+#include "texture.hpp"
 #include "mesh.hpp"
+#include "camera.hpp"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-static const struct
-{
-    float x, y;
-    float r, g, b;
-    float u, v;
-} vertices[3] =
-{
-    { -0.6f, -0.4f, 1.f, 0.f, 0.f, 0.0f, 0.0f },
-    {  0.6f, -0.4f, 0.f, 1.f, 0.f, 0.5f, 1.0f },
-    {   0.f,  0.6f, 0.f, 0.f, 1.f, 1.0f, 0.0f }
-};
-
-static struct Context {
+struct Context {
   GLFWwindow* window;
   int width, height;
   float aspectRatio;
+  Camera camera;
+
+  std::map<int, bool> pressedKeys;
   Shader s;
 
   GLuint texture1;
+
+  Mesh mesh;
+  Texture texture;
 
   double scale = 1.0;
   bool projectionSwitch = false;
   bool reloadShader = false;
 
+  int frameCounter = 0;
+  int tickCounter = 0;
+  const double tickTime = 1.0 / 60.0;
+
 } context;
 
-static void error_callback(int error, const char* description);
-static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+static void errorCallback(int error, const char* description);
+static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+static void windowResizeCallback(GLFWwindow* window, int width, int height);
 static void init();
+static void update(double dt);
 static void draw();
 
 int main(void)
@@ -64,70 +68,23 @@ int main(void)
 
   init();
 
-  GLuint vertex_buffer;
-
   context.s = {"basic"};
 
-  glGenBuffers(1, &vertex_buffer);
-  glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+  context.mesh.load("assets/obj/robo-boodie.obj");
 
-  GLuint VAO;
-  glGenVertexArrays(1, &VAO);
-  glBindVertexArray(VAO);
-  glEnableVertexAttribArray(context.s.findVarLocation("vPos"));
-  glVertexAttribPointer(
-    context.s.findVarLocation("vPos"),
-    2,
-    GL_FLOAT,
-    GL_FALSE,
-    sizeof(vertices[0]),
-    nullptr
-  );
-  glEnableVertexAttribArray(context.s.findVarLocation("vCol"));
-  glVertexAttribPointer(
-    context.s.findVarLocation("vCol"),
-    3,
-    GL_FLOAT,
-    GL_FALSE,
-    sizeof(vertices[0]),
-    (void*) (sizeof(float) * 2)
-  );
-  glEnableVertexAttribArray(context.s.findVarLocation("vUV"));
-  glVertexAttribPointer(
-    context.s.findVarLocation("vUV"),
-    2,
-    GL_FLOAT,
-    GL_FALSE,
-    sizeof(vertices[0]),
-    (void*) (sizeof(float) * 5)
-  );
+  context.texture.gen("assets/textures/low-poly.png");
 
-  glGenTextures(1, &context.texture1);
-  glBindTexture(GL_TEXTURE_2D, context.texture1);
+  context.camera.pos() = {0.0f, 0.0f, 5.0f};
 
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  int width, height, channels;
-  auto img_data = stbi_load("assets/flower-texture.jpg", &width, &height, &channels, 0);
-  if(!img_data) {
-    std::perror("couldn't load data");
-  } else {
-    std::printf("IMG_WIDTH: %d\n", width);
-    std::printf("IMG_HEIGHT: %d\n", height);
-    std::printf("IMG_CHANNELS: %d\n", channels);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, img_data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-  }
-  stbi_image_free(img_data);
-
-  Assimp::Importer importer;
-
+  double timeAccumulator = 0.0;
+  double lastFrameTime = 0.0;
+  double fpsClock = 0.0f;
 
   while (!glfwWindowShouldClose(context.window)) {
-    double startTime = glfwGetTime();
+    double frameStartTime = glfwGetTime();
+    double frameTimeDifference = frameStartTime - lastFrameTime;
+    lastFrameTime = frameStartTime;
+    timeAccumulator += frameTimeDifference;
 
     if(context.reloadShader) {
       context.reloadShader = false;
@@ -135,41 +92,51 @@ int main(void)
       context.s = {"basic"};
     }
 
-    glfwGetFramebufferSize(context.window, &context.width, &context.height);
-    context.aspectRatio = context.width / static_cast<float>(context.height);
+    while(timeAccumulator > context.tickTime) {
+      context.tickCounter++;
+      timeAccumulator -= context.tickTime;
+      update(context.tickTime);
+    }
 
-    glViewport(0, 0, context.width, context.height);
     glClearColor(37.f / 255.f, 150.f / 255.f, 190.f / 255.f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     draw();
-    glErrorChecker(__LINE__);
+    //glErrorChecker(__LINE__);
     glfwPollEvents();
+
+    if(fpsClock + 1.0 < frameStartTime) {
+      fpsClock = frameStartTime;
+      std::printf("FPS: %3d TICKS: %3d\n",  context.frameCounter, context.tickCounter);
+      context.frameCounter = 0;
+      context.tickCounter = 0;
+    }
+    context.frameCounter++;
   }
 
+  context.texture.destruct();
   glfwDestroyWindow(context.window);
-
   glfwTerminate();
-  glDeleteTextures(1, &context.texture1);
+
   exit(EXIT_SUCCESS);
 }
 
-static void error_callback(int error, const char* description) {
+static void errorCallback(int error, const char* description) {
     fprintf(stderr, "Error: %s\n", description);
 }
 
-static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
     glfwSetWindowShouldClose(window, GLFW_TRUE);
   }
 
-  static constexpr auto scaleCoefficient = 1.02;
-  if(key == GLFW_KEY_W && action == GLFW_PRESS) {
-    context.scale *= scaleCoefficient;
+  if(action == GLFW_PRESS) {
+    context.pressedKeys[key] = true;
   }
-  if(key == GLFW_KEY_S) {
-    context.scale /= scaleCoefficient;
+  if(action == GLFW_RELEASE) {
+    context.pressedKeys[key] = false;
   }
+
   if(key == GLFW_KEY_Q && action == GLFW_PRESS) {
     context.projectionSwitch ^= 1;
   }
@@ -178,7 +145,65 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
   }
 }
 
+static void windowResizeCallback(GLFWwindow* window, int width, int height) {
+  context.width = width;
+  context.height = height;
+  glViewport(0, 0, width, height);
+
+  context.aspectRatio = context.width / static_cast<float>(context.height);
+}
+
+static void updateCamMovement(double dt);
+
+static void update(double dt) {
+  updateCamMovement(dt);
+  context.camera.update(dt);
+}
+
+static void updateCamMovement(double dt) {
+  auto& pressedKeys = context.pressedKeys;
+  auto& camera = context.camera;
+
+  auto moveSpeed = 15.f;
+  if(pressedKeys[GLFW_KEY_W]) {
+    camera.camSpeed = moveSpeed;
+  }
+  if(pressedKeys[GLFW_KEY_S]) {
+    camera.camSpeed = -moveSpeed;
+  }
+  if(pressedKeys[GLFW_KEY_A]) {
+    camera.strafeSpeed = moveSpeed;
+  }
+  if(pressedKeys[GLFW_KEY_D]) {
+    camera.strafeSpeed = -moveSpeed;
+  }
+
+  if(pressedKeys[GLFW_KEY_R]) {
+    camera.pos().y += moveSpeed * dt;
+  }
+  if(pressedKeys[GLFW_KEY_F]) {
+    camera.pos().y -= moveSpeed * dt;
+  }
+
+  auto rotSpeed = 30.f;
+  if(pressedKeys[GLFW_KEY_LEFT]) {
+    camera.rotateHor = -rotSpeed;
+  }
+  if(pressedKeys[GLFW_KEY_RIGHT]) {
+    camera.rotateHor = rotSpeed;
+  }
+  if(pressedKeys[GLFW_KEY_UP]) {
+    camera.rotateVert = -rotSpeed;
+  }
+  if(pressedKeys[GLFW_KEY_DOWN]) {
+    camera.rotateVert = rotSpeed;
+  }
+}
+
 static void draw() {
+
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_BACK);
   double x, y;
   glfwGetCursorPos(context.window, &x, &y);
   x /= float(context.width) * 0.5f;
@@ -188,8 +213,8 @@ static void draw() {
   x *= context.aspectRatio;
 
   glm::mat4 m = glm::mat4(1.0f), v, p, mvp;
-  m = glm::translate(m, glm::vec3(x, y, 0.0f));
-  m *= glm::rotate(float(glfwGetTime()), glm::vec3(0.0f, 0.0f, 1.0f));
+  m *= glm::rotate(float(glfwGetTime()), glm::vec3(0.0f, 1.0f, 0.0f));
+  //m = glm::translate(m, glm::vec3(x, y, 3.0f));
 
 
   if(context.projectionSwitch) {
@@ -198,19 +223,19 @@ static void draw() {
     v = glm::mat4(1.0f);
   } else {
     p = glm::perspective(1.0f, context.aspectRatio, 0.5f, 300.0f);
-    v = glm::lookAt({0.0f, 0.0f, 10.0f}, glm::vec3(), {0.0f, 1.0f, 0.0f});
+    v = context.camera.view();
   }
   mvp = p * v * m;
 
-  context.s.use();
-  glBindTexture(GL_TEXTURE_2D, context.texture1);
   glUniformMatrix4fv(context.s.findUniformLocation("MVP"), 1, GL_FALSE, glm::value_ptr(mvp));
-  glDrawArrays(GL_TRIANGLES, 0, 3);
+  glBindTexture(GL_TEXTURE_2D, context.texture.texture);
+  context.mesh.render(context.s);
+
   glfwSwapBuffers(context.window);
 }
 
 static void init() {
-  glfwSetErrorCallback(error_callback);
+  glfwSetErrorCallback(errorCallback);
 
   if (!glfwInit())
     exit(EXIT_FAILURE);
@@ -234,7 +259,8 @@ static void init() {
   //glfwMaximizeWindow(window);
 
   glfwSetInputMode(context.window, GLFW_STICKY_KEYS, GLFW_TRUE);
-  glfwSetKeyCallback(context.window, key_callback);
+  glfwSetKeyCallback(context.window, keyCallback);
+  glfwSetWindowSizeCallback(context.window, windowResizeCallback);
 
   glfwMakeContextCurrent(context.window);
   glfwSwapInterval(1);
@@ -247,4 +273,8 @@ static void init() {
     fprintf(stderr, "Error: %s\n", glewGetErrorString(GLEW_VERSION));
     exit(EXIT_FAILURE);
   }
+
+  glEnable(GL_DEPTH_TEST);
+
+  windowResizeCallback(context.window, context.width, context.height);
 }
