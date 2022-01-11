@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <map>
+#include <array>
 
 
 #include "shader.hpp"
@@ -34,8 +35,19 @@ struct Context {
 
   GLuint texture1;
 
-  Mesh mesh;
+  Mesh playerMesh;
+  glm::vec3 playerPosition;
+  glm::vec3 playerVelocity;
+  float playerDirectionAngle = 0.0f;
+  float playerChangeAngle = 0.0f;
+
+  Mesh bombMesh;
+  std::vector<glm::vec3> bombPositions;
+
+  Mesh floor;
+
   Texture texture;
+  Texture flower;
 
   double scale = 1.0;
   bool projectionSwitch = false;
@@ -44,6 +56,8 @@ struct Context {
   int frameCounter = 0;
   int tickCounter = 0;
   const double tickTime = 1.0 / 60.0;
+
+  std::array<glm::vec2, 10> mouseMoveHistory;
 
 } context;
 
@@ -70,11 +84,18 @@ int main(void)
 
   context.s = {"basic"};
 
-  context.mesh.load("assets/obj/robo-boodie.obj");
+  context.playerMesh.load("assets/obj/robo-boodie.obj");
+  context.bombMesh.load("assets/obj/bomb.obj");
+  context.floor.load("assets/obj/plane.obj");
 
   context.texture.gen("assets/textures/low-poly.png");
+  context.flower.gen("assets/textures/flower-texture.jpg");
 
-  context.camera.pos() = {0.0f, 0.0f, 5.0f};
+  context.camera.pos() = {10.0f, 12.0f, 0.0f};
+  context.camera.vertAngle() = -glm::quarter_pi<float>();
+  context.camera.horAngle() = -glm::half_pi<float>();
+
+  context.playerPosition = {0.0f, 0.0f, 0.0f};
 
   double timeAccumulator = 0.0;
   double lastFrameTime = 0.0;
@@ -115,6 +136,7 @@ int main(void)
   }
 
   context.texture.destruct();
+  context.flower.destruct();
   glfwDestroyWindow(context.window);
   glfwTerminate();
 
@@ -172,10 +194,10 @@ static void updateCamMovement(double dt) {
     camera.camSpeed = -moveSpeed;
   }
   if(pressedKeys[GLFW_KEY_A]) {
-    camera.strafeSpeed = moveSpeed;
+    camera.strafeSpeed = -moveSpeed;
   }
   if(pressedKeys[GLFW_KEY_D]) {
-    camera.strafeSpeed = -moveSpeed;
+    camera.strafeSpeed = moveSpeed;
   }
 
   if(pressedKeys[GLFW_KEY_R]) {
@@ -187,10 +209,10 @@ static void updateCamMovement(double dt) {
 
   auto rotSpeed = 30.f;
   if(pressedKeys[GLFW_KEY_LEFT]) {
-    camera.rotateHor = -rotSpeed;
+    camera.rotateHor = rotSpeed;
   }
   if(pressedKeys[GLFW_KEY_RIGHT]) {
-    camera.rotateHor = rotSpeed;
+    camera.rotateHor = -rotSpeed;
   }
   if(pressedKeys[GLFW_KEY_UP]) {
     camera.rotateVert = -rotSpeed;
@@ -198,12 +220,7 @@ static void updateCamMovement(double dt) {
   if(pressedKeys[GLFW_KEY_DOWN]) {
     camera.rotateVert = rotSpeed;
   }
-}
 
-static void draw() {
-
-  glEnable(GL_CULL_FACE);
-  glCullFace(GL_BACK);
   double x, y;
   glfwGetCursorPos(context.window, &x, &y);
   x /= float(context.width) * 0.5f;
@@ -212,24 +229,97 @@ static void draw() {
   y = 1.0f - y;
   x *= context.aspectRatio;
 
-  glm::mat4 m = glm::mat4(1.0f), v, p, mvp;
-  m *= glm::rotate(float(glfwGetTime()), glm::vec3(0.0f, 1.0f, 0.0f));
-  //m = glm::translate(m, glm::vec3(x, y, 3.0f));
+  printf("Mouse: %g %g\n", x, y);
 
+  if(pressedKeys[GLFW_KEY_SPACE]) {
+    context.bombPositions.emplace_back(context.playerPosition);
+  }
+
+  context.playerVelocity = glm::vec3(0.0f);
+  auto maxVelocity = 20.f;
+  if(pressedKeys[GLFW_KEY_I]) {
+    context.playerVelocity.x = -maxVelocity;
+  }
+  if(pressedKeys[GLFW_KEY_K]) {
+    context.playerVelocity.x = maxVelocity;
+  }
+
+  if(pressedKeys[GLFW_KEY_J]) {
+    context.playerVelocity.z = maxVelocity;
+  }
+  if(pressedKeys[GLFW_KEY_L]) {
+    context.playerVelocity.z = -maxVelocity;
+  }
+  context.playerChangeAngle = std::atan2(-context.playerVelocity.z, context.playerVelocity.x) - context.playerDirectionAngle;
+  context.playerChangeAngle *= dt * 5;
+  context.playerDirectionAngle += context.playerChangeAngle;
+
+  context.playerVelocity *= dt;
+  context.playerPosition += context.playerVelocity;
+}
+
+static void draw() {
+  glm::mat4 v, p, mvp;
 
   if(context.projectionSwitch) {
     p = glm::ortho(-context.aspectRatio, context.aspectRatio, -1.f, 1.f, 1.f, -1.f);
-    //v = glm::lookAt({0.0f, 0.0f, 2.0f}, glm::vec3(), {0.0f, 1.0f, 0.0f});
     v = glm::mat4(1.0f);
+    v = glm::translate(glm::vec3(0.0f, -0.8f, 0.0f));
   } else {
     p = glm::perspective(1.0f, context.aspectRatio, 0.5f, 300.0f);
     v = context.camera.view();
+
+    v = glm::lookAt(
+      context.playerPosition + glm::vec3(12.f, 15.f, 0.0f),
+      context.playerPosition,
+      glm::vec3(0.0f, 1.0f, 0.0f)
+    );
   }
+
+  context.s.use();
+  glBindTexture(GL_TEXTURE_2D, context.texture.texture);
+  glUniform1f(context.s.findUniformLocation("time"), glfwGetTime());
+
+  for(size_t i = 0 ; i < context.bombPositions.size(); i++) {
+
+    glm::mat4 m {1.0f};
+
+    auto bombPosition = context.bombPositions[i];
+    m *= glm::translate(bombPosition);
+    m *= glm::rotate(float(glfwGetTime()), glm::vec3(0.0f, 1.0f, 0.0f));
+    mvp = p * v * m;
+
+    glUniformMatrix4fv(context.s.findUniformLocation("Model"), 1, GL_FALSE, glm::value_ptr(m));
+    glUniformMatrix4fv(context.s.findUniformLocation("MVP"), 1, GL_FALSE, glm::value_ptr(mvp));
+
+    context.bombMesh.render(context.s);
+  }
+
+  glm::mat4 m {1.0f};
+
+  auto levitatingVector = glm::vec3(0.0f, 0.3f, 0.0f);
+  levitatingVector *= glm::sin(3*glfwGetTime());
+  levitatingVector += glm::vec3(0.0f, 0.2f, 0.0f);
+  m *= glm::translate(levitatingVector);
+
+  m *= glm::translate(context.playerPosition);
+  m *= glm::rotate(context.playerDirectionAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+
   mvp = p * v * m;
 
+  glUniformMatrix4fv(context.s.findUniformLocation("Model"), 1, GL_FALSE, glm::value_ptr(m));
   glUniformMatrix4fv(context.s.findUniformLocation("MVP"), 1, GL_FALSE, glm::value_ptr(mvp));
-  glBindTexture(GL_TEXTURE_2D, context.texture.texture);
-  context.mesh.render(context.s);
+
+  context.playerMesh.render(context.s);
+
+  glBindTexture(GL_TEXTURE_2D, context.flower.texture);
+  m = glm::mat4(1.0f);
+  m *= glm::rotate(glm::half_pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f));
+  mvp = p * v * m;
+  glUniformMatrix4fv(context.s.findUniformLocation("Model"), 1, GL_FALSE, glm::value_ptr(m));
+  glUniformMatrix4fv(context.s.findUniformLocation("MVP"), 1, GL_FALSE, glm::value_ptr(mvp));
+
+  context.floor.render(context.s);
 
   glfwSwapBuffers(context.window);
 }
@@ -256,7 +346,7 @@ static void init() {
     glfwTerminate();
     exit(EXIT_FAILURE);
   }
-  //glfwMaximizeWindow(window);
+  glfwMaximizeWindow(context.window);
 
   glfwSetInputMode(context.window, GLFW_STICKY_KEYS, GLFW_TRUE);
   glfwSetKeyCallback(context.window, keyCallback);
@@ -275,6 +365,9 @@ static void init() {
   }
 
   glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_BACK);
 
+  glfwGetFramebufferSize(context.window, &context.width, &context.height);
   windowResizeCallback(context.window, context.width, context.height);
 }

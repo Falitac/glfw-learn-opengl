@@ -5,16 +5,32 @@ layout(location = 1) in vec3 vNormal;
 layout(location = 2) in vec2 vUV;
 
 uniform mat4 MVP;
+uniform mat4 Model;
+uniform float time;
 out vec2 uv;
 
 out float lightValue;
 
-void main()
-{
+void main() {
   gl_Position = MVP*vec4(vPos, 1.0);
-  uv = vUV;
 
-  vec3 lightDirection = vec3(0.0, 0.0, 1.0);
+  vec3 modelPos = vec3(Model*vec4(vPos, 1.0));
+  vec3 normal = vec3(Model *vec4(vNormal, 1.0));
+  normal = normalize(normal);
+
+  float radius = 7.0;
+  vec3 lightPosition;
+  lightPosition.x = radius * sin(time);
+  lightPosition.z = radius * cos(time);
+  //float radius2 = length(lightPosition.xy);
+  //lightPosition.z = radius2 * sin(time);
+
+  lightPosition = normalize(lightPosition);
+
+  vec3 lightDirection = vec3(1.0, 1.0, 1.0);
+  normalize(lightDirection);
   lightValue = dot(vNormal, lightDirection);
-  lightValue = clamp(lightValue, 0.2, 1.0);
+  lightValue = clamp(lightValue, 0.3, 1.0);
+
+  uv = vUV;
 }
