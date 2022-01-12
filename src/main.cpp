@@ -44,6 +44,9 @@ struct Context {
   Mesh bombMesh;
   std::vector<glm::vec3> bombPositions;
 
+  Mesh cube;
+  std::vector<std::vector<int>> grid;
+
   Mesh floor;
 
   Texture texture;
@@ -87,6 +90,7 @@ int main(void)
   context.playerMesh.load("assets/obj/robo-boodie.obj");
   context.bombMesh.load("assets/obj/bomb.obj");
   context.floor.load("assets/obj/plane.obj");
+  context.cube.load("assets/obj/cube.obj");
 
   context.texture.gen("assets/textures/low-poly.png");
   context.flower.gen("assets/textures/flower-texture.jpg");
@@ -96,6 +100,19 @@ int main(void)
   context.camera.horAngle() = -glm::half_pi<float>();
 
   context.playerPosition = {0.0f, 0.0f, 0.0f};
+
+  context.grid = std::vector(16, std::vector<int>(33, 0));
+
+  for(auto it = context.grid.begin(); it != context.grid.end(); it++) {
+    if(it == context.grid.begin() || it + 1 == context.grid.end()) {
+      for(auto& element : *it) {
+        element = 1;
+      }
+      continue;
+    }
+    it->front() = 1;
+    it->back() = 1;
+  }
 
   double timeAccumulator = 0.0;
   double lastFrameTime = 0.0;
@@ -131,6 +148,8 @@ int main(void)
       std::printf("FPS: %3d TICKS: %3d\n",  context.frameCounter, context.tickCounter);
       context.frameCounter = 0;
       context.tickCounter = 0;
+      std::printf("Size: %llu\n", context.bombPositions.size());
+    std::printf("anglechange : %f\n", context.playerChangeAngle);
     }
     context.frameCounter++;
   }
@@ -229,7 +248,6 @@ static void updateCamMovement(double dt) {
   y = 1.0f - y;
   x *= context.aspectRatio;
 
-  printf("Mouse: %g %g\n", x, y);
 
   if(pressedKeys[GLFW_KEY_SPACE]) {
     context.bombPositions.emplace_back(context.playerPosition);
@@ -237,25 +255,50 @@ static void updateCamMovement(double dt) {
 
   context.playerVelocity = glm::vec3(0.0f);
   auto maxVelocity = 20.f;
-  if(pressedKeys[GLFW_KEY_I]) {
+  if(pressedKeys[GLFW_KEY_W]) {
     context.playerVelocity.x = -maxVelocity;
   }
-  if(pressedKeys[GLFW_KEY_K]) {
+  if(pressedKeys[GLFW_KEY_S]) {
     context.playerVelocity.x = maxVelocity;
   }
 
-  if(pressedKeys[GLFW_KEY_J]) {
+  if(pressedKeys[GLFW_KEY_A]) {
     context.playerVelocity.z = maxVelocity;
   }
-  if(pressedKeys[GLFW_KEY_L]) {
+  if(pressedKeys[GLFW_KEY_D]) {
     context.playerVelocity.z = -maxVelocity;
   }
-  context.playerChangeAngle = std::atan2(-context.playerVelocity.z, context.playerVelocity.x) - context.playerDirectionAngle;
-  context.playerChangeAngle *= dt * 5;
-  context.playerDirectionAngle += context.playerChangeAngle;
+  auto tmp = glm::vec3(0.0f);
+  if(context.playerVelocity != glm::vec3(0.0f)) {
+    context.playerChangeAngle = std::atan2(-context.playerVelocity.z, context.playerVelocity.x) - context.playerDirectionAngle;
+    if(std::fabs(context.playerChangeAngle) > glm::pi<float>()) {
+      std::printf("%f\n", context.playerChangeAngle);
+      if(context.playerChangeAngle < 0.0) {
+        context.playerChangeAngle += glm::two_pi<float>();
+      } else {
+        context.playerChangeAngle -= glm::two_pi<float>();
+      }
+    }
+    context.playerChangeAngle *= dt * 5;
+    context.playerDirectionAngle += context.playerChangeAngle;
+    tmp = glm::vec3(glm::cos(context.playerDirectionAngle), 0.0f, -glm::sin(context.playerDirectionAngle));
+    tmp *= dt * maxVelocity;
+  }
 
   context.playerVelocity *= dt;
-  context.playerPosition += context.playerVelocity;
+  context.playerPosition += tmp;
+
+  auto& grid = context.grid;
+  for(size_t x = 0 ; x < grid.size(); x++) {
+    for(size_t z = 0 ; z < grid[x].size(); z++) {
+      if(grid[x][z] == 0) {
+        continue;
+      }
+      auto boxPosition = glm::vec3(x * 2.0f + 1.0f, 0.0f, z * 2.0f + 1.0f);
+      //auto 
+      //context.playerPosition;
+    }
+  }
 }
 
 static void draw() {
@@ -269,8 +312,15 @@ static void draw() {
     p = glm::perspective(1.0f, context.aspectRatio, 0.5f, 300.0f);
     v = context.camera.view();
 
+    constexpr auto camRadius = 18.f;
+    constexpr auto camAngle = 0.7f * glm::half_pi<float>();
+    constexpr auto camHeight = glm::vec3(
+      std::cos(camAngle) * camRadius,
+      std::sin(camAngle) * camRadius,
+      0.0f
+    );
     v = glm::lookAt(
-      context.playerPosition + glm::vec3(12.f, 15.f, 0.0f),
+      context.playerPosition + camHeight,
       context.playerPosition,
       glm::vec3(0.0f, 1.0f, 0.0f)
     );
@@ -293,6 +343,24 @@ static void draw() {
     glUniformMatrix4fv(context.s.findUniformLocation("MVP"), 1, GL_FALSE, glm::value_ptr(mvp));
 
     context.bombMesh.render(context.s);
+  }
+
+  for(size_t x = 0 ; x < context.grid.size(); x++) {
+    for(size_t z = 0 ; z < context.grid[x].size(); z++) {
+      if(context.grid[x][z] == 0) {
+        continue;
+      }
+      glm::mat4 m {1.0f};
+
+      auto cubePosition = glm::vec3(2.0f * x, 0.0f, 2.0f * z);
+      m *= glm::translate(cubePosition);
+      mvp = p * v * m;
+
+      glUniformMatrix4fv(context.s.findUniformLocation("Model"), 1, GL_FALSE, glm::value_ptr(m));
+      glUniformMatrix4fv(context.s.findUniformLocation("MVP"), 1, GL_FALSE, glm::value_ptr(mvp));
+
+      context.cube.render(context.s);
+    }
   }
 
   glm::mat4 m {1.0f};

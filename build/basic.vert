@@ -25,11 +25,12 @@ void main() {
   //float radius2 = length(lightPosition.xy);
   //lightPosition.z = radius2 * sin(time);
 
-  lightPosition = normalize(lightPosition);
+  //mat3 Normal = mat3(transpose(inverse(Model))) * vNormal;
+  
 
-  vec3 lightDirection = vec3(1.0, 1.0, 1.0);
-  normalize(lightDirection);
-  lightValue = dot(vNormal, lightDirection);
+  vec3 lightDirection = vec3(0.0, 1.0, 0.0);
+  lightDirection = normalize(lightDirection - modelPos);
+  lightValue = dot(normalize(normal), lightDirection);
   lightValue = clamp(lightValue, 0.3, 1.0);
 
   uv = vUV;
