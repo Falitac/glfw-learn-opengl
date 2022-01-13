@@ -1,4 +1,4 @@
-#include "plane.hpp"
+#include "Plane.hpp"
 
 #include <vector>
 

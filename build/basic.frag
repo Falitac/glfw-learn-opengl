@@ -26,6 +26,17 @@ void main() {
   vec3 ambient = vec3(0.22);
   vec3 diffuse = vec3(0.0);
 
+  vec3 colors[9];
+  colors[0] = vec3(0.0, 0.0, 1.0);
+  colors[1] = vec3(0.0, 0.0, 0.0);
+  colors[2] = vec3(0.0, 1.0, 1.0);
+  colors[3] = vec3(0.0, 1.0, 0.0);
+  colors[4] = vec3(1.0, 0.0, 1.0);
+  colors[5] = vec3(1.0, 0.0, 0.0);
+  colors[6] = vec3(1.0, 1.0, 1.0);
+  colors[7] = vec3(1.0, 1.0, 0.0);
+  colors[8] = vec3(0.0, 0.0, 1.0);
+
   float stride = 16.0;
   float offset = 1.0;
   vec3 lightPos;
@@ -34,7 +45,8 @@ void main() {
     for(int z = 0; z < 3; z++) {
       lightPos.x = stride * float(x) + offset;
       lightPos.z = 2 * stride * float(z) + offset;
-      diffuse += calculateDiffuse(lightPos);
+      vec3 color = colors[x * 3 + z];
+      diffuse += calculateDiffuse(lightPos, 200.0, color);
     }
   }
 

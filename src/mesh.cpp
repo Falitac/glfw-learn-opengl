@@ -1,4 +1,4 @@
-#include "mesh.hpp"
+#include "Mesh.hpp"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>

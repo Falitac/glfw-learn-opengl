@@ -1,4 +1,4 @@
-#include "camera.hpp"
+#include "Camera.hpp"
 
 
 Camera::Camera(const glm::vec3& initPosition)

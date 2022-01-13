@@ -1,7 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
-#include "mesh.hpp"
+#include "Mesh.hpp"
 
 class Player
 {

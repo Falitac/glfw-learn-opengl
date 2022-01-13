@@ -15,10 +15,10 @@
 #include <map>
 #include <array>
 
-#include "shader.hpp"
-#include "texture.hpp"
-#include "mesh.hpp"
-#include "camera.hpp"
+#include "Shader.hpp"
+#include "Texture.hpp"
+#include "Mesh.hpp"
+#include "Camera.hpp"
 
 class App {
 public:

@@ -4,7 +4,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 
-#include "shader.hpp"
+#include "Shader.hpp"
 
 struct Vertex {
   glm::vec3 position;
