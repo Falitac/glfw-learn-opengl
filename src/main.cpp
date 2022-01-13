@@ -148,8 +148,6 @@ int main(void)
       std::printf("FPS: %3d TICKS: %3d\n",  context.frameCounter, context.tickCounter);
       context.frameCounter = 0;
       context.tickCounter = 0;
-      std::printf("Size: %llu\n", context.bombPositions.size());
-    std::printf("anglechange : %f\n", context.playerChangeAngle);
     }
     context.frameCounter++;
   }
@@ -256,29 +254,28 @@ static void updateCamMovement(double dt) {
   context.playerVelocity = glm::vec3(0.0f);
   auto maxVelocity = 20.f;
   if(pressedKeys[GLFW_KEY_W]) {
-    context.playerVelocity.x = -maxVelocity;
+    context.playerVelocity.x -= maxVelocity;
   }
   if(pressedKeys[GLFW_KEY_S]) {
-    context.playerVelocity.x = maxVelocity;
+    context.playerVelocity.x += maxVelocity;
   }
 
   if(pressedKeys[GLFW_KEY_A]) {
-    context.playerVelocity.z = maxVelocity;
+    context.playerVelocity.z += maxVelocity;
   }
   if(pressedKeys[GLFW_KEY_D]) {
-    context.playerVelocity.z = -maxVelocity;
+    context.playerVelocity.z -= maxVelocity;
   }
+
   auto tmp = glm::vec3(0.0f);
   if(context.playerVelocity != glm::vec3(0.0f)) {
     context.playerChangeAngle = std::atan2(-context.playerVelocity.z, context.playerVelocity.x) - context.playerDirectionAngle;
-    if(std::fabs(context.playerChangeAngle) > glm::pi<float>()) {
-      std::printf("%f\n", context.playerChangeAngle);
-      if(context.playerChangeAngle < 0.0) {
-        context.playerChangeAngle += glm::two_pi<float>();
-      } else {
-        context.playerChangeAngle -= glm::two_pi<float>();
-      }
+    context.playerChangeAngle = std::fmod(context.playerChangeAngle, glm::two_pi<float>());
+
+    if(context.playerChangeAngle > glm::pi<float>()) {
+      context.playerChangeAngle -=  glm::two_pi<float>();
     }
+
     context.playerChangeAngle *= dt * 5;
     context.playerDirectionAngle += context.playerChangeAngle;
     tmp = glm::vec3(glm::cos(context.playerDirectionAngle), 0.0f, -glm::sin(context.playerDirectionAngle));
@@ -329,6 +326,7 @@ static void draw() {
   context.s.use();
   glBindTexture(GL_TEXTURE_2D, context.texture.texture);
   glUniform1f(context.s.findUniformLocation("time"), glfwGetTime());
+  glUniform3fv(context.s.findUniformLocation("playerPos"), 1, glm::value_ptr(context.playerPosition));
 
   for(size_t i = 0 ; i < context.bombPositions.size(); i++) {
 
