@@ -28,6 +28,18 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
   if(key == GLFW_KEY_Z && action == GLFW_PRESS) {
     app->reloadShader = true;
   }
+
+  if(key == GLFW_KEY_F && action == GLFW_PRESS) {
+    const auto mode = glfwGetVideoMode(app->monitors[0]);
+    if(app->isFullScreen) {
+      glfwSetWindowMonitor(app->window, nullptr, 0, 0, app->width, app->height, mode->refreshRate);
+      app->isFullScreen = false;
+    } else {
+      glfwSetWindowMonitor(app->window, app->monitors[0], 0, 0, mode->width, mode->height, mode->refreshRate);
+      app->isFullScreen = true;
+    }
+
+  }
 }
 
 void windowResizeCallback(GLFWwindow* window, int width, int height) {
@@ -38,6 +50,24 @@ void windowResizeCallback(GLFWwindow* window, int width, int height) {
   glViewport(0, 0, width, height);
 }
 
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+  app->camRadius += yoffset * app->dt * 40.f;
+  std::printf("Scroll: %lf %lf\n", xoffset, yoffset);
+
+}
+
+void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+  if(button == GLFW_MOUSE_BUTTON_LEFT) {
+    if(action == GLFW_PRESS) {
+      glfwSetCursorPos(window, app->width / 2.0, app->height / 2.0);
+      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+    }
+    if(action == GLFW_PRESS) {
+      glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
+  }
+
+}
 
 void checkGLErrors(int line) {
   static int errorCount;
@@ -79,7 +109,7 @@ void App::otherInit() {
 
   for(int x = 0; x < 16; x++) {
     for(int z = 0; z < 33; z++) {
-      if( x % 2 == 0 && z % 2 == 0) {
+      if( x % 2 == 0) {
         grid[x][z] = 1;
       }
     }
@@ -149,6 +179,7 @@ void App::run() {
   init();
   otherInit();
   loop();
+  app = nullptr;
 }
 
 void App::loop() {
@@ -187,20 +218,35 @@ void App::loop() {
       std::printf("FPS: %3d TICKS: %3d\n",  frameCounter, tickCounter);
       frameCounter = 0;
       tickCounter = 0;
-      std::printf("%f %f\n", playerPosition.x, playerPosition.z);
+      std::printf("Player pos: %f %f\n", playerPosition.x, playerPosition.z);
+      std::printf("Size: %llu\n", bombs.size());
     }
     frameCounter++;
   }
 }
 
 void App::update() {
-  //updateCamMovement();
+  int mouseLPMState = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
+  mouseDiff = glm::vec2(0.0f);
+  if(mouseLPMState == GLFW_PRESS) {
+    double xpos, ypos;
+    glfwGetCursorPos(window, &xpos, &ypos);
+    mouseDiff = glm::vec2(xpos - width / 2.0, ypos - height / 2.0);
+    mouseDiff.y = -mouseDiff.y;
 
-  if(pressedKeys[GLFW_KEY_SPACE]) {
-    bombPositions.emplace_back(playerPosition);
+    if(std::fabs(mouseDiff.y) < 0.7f) {
+      mouseDiff.y = 0;
+    }
+
+    std::printf("%f %f\n", mouseDiff.x, mouseDiff.y);
+
+    camAngle += mouseDiff.y * dt;
+
+    glfwSetCursorPos(window, width / 2.0, height / 2.0);
   }
 
   playerVelocity = glm::vec3(0.0f);
+
   auto maxVelocity = 20.f;
   if(pressedKeys[GLFW_KEY_W]) {
     playerVelocity.x -= maxVelocity;
@@ -215,6 +261,7 @@ void App::update() {
   if(pressedKeys[GLFW_KEY_D]) {
     playerVelocity.z -= maxVelocity;
   }
+
 
   auto tmp = glm::vec3(0.0f);
   if(playerVelocity != glm::vec3(0.0f)) {
@@ -232,7 +279,7 @@ void App::update() {
   }
 
   playerVelocity *= dt;
-  playerPosition += tmp;
+  playerPosition += playerVelocity;
 
   auto directionVector = [&](const auto& target) {
     std::array<glm::vec2, 4> compass = {
@@ -301,14 +348,48 @@ void App::update() {
       }
     }
   }
+  if(pressedKeys[GLFW_KEY_SPACE] && bombCooldownTimer < glfwGetTime()) {
+    if(bombAmount > 0) {
+      bombCooldownTimer = bombCooldown + glfwGetTime();
+      bombAmount--;
+
+      auto bombPosition = glm::vec3();
+      bombPosition.x = playerPosition.x - std::fmod(playerPosition.x - 1.0, 2.0) + 1.0;
+      bombPosition.z = playerPosition.z - std::fmod(playerPosition.z - 1.0, 2.0) + 1.0;
+      bombs.emplace_back(bombPosition, bombDestructionTime + glfwGetTime());
+
+      //grid[(playerPosition.x + 1) / 2][(playerPosition.z + 1) / 2] = 2;
+    }
+  }
+
+  for(auto it = bombs.begin(); it != bombs.end(); it++) {
+    if(std::get<1>(*it) < glfwGetTime()) {
+      auto& bomb = *it;
+      int xPos = std::get<0>(bomb).x / 2;
+      int zPos = std::get<0>(bomb).z / 2;
+
+      try {
+        for(int i = 0; i < bombPower; i++) {
+          auto offset = i + 1;
+          grid.at(xPos).at(zPos - offset) = 0;
+          grid.at(xPos).at(zPos + offset) = 0;
+          grid.at(xPos - offset).at(zPos) = 0;
+          grid.at(xPos + offset).at(zPos) = 0;
+        }
+      } catch(...) {
+        std::printf("Wrong pos!\n");
+      }
+
+      bombAmount++;
+      bombs.erase(it--);
+    }
+  }
 }
 
 void App::render() {
   glm::mat4 v, p, mvp;
 
-  constexpr auto camRadius = 25.f;
-  constexpr auto camAngle = 0.7f * glm::half_pi<float>();
-  constexpr auto camHeight = glm::vec3(
+  auto camHeight = glm::vec3(
     std::cos(camAngle) * camRadius,
     std::sin(camAngle) * camRadius,
     0.0f
@@ -335,13 +416,18 @@ void App::render() {
   glUniform3fv(s.findUniformLocation("playerPos"), 1, glm::value_ptr(playerPosition));
   glUniform3fv(s.findUniformLocation("camPos"), 1, glm::value_ptr(camPos));
 
-  for(size_t i = 0 ; i < bombPositions.size(); i++) {
+  for(size_t i = 0 ; i < bombs.size(); i++) {
 
     glm::mat4 m {1.0f};
 
-    auto bombPosition = bombPositions[i];
+    auto bombPosition = std::get<0>(bombs[i]);
     m *= glm::translate(bombPosition);
-    m *= glm::rotate(float(glfwGetTime()), glm::vec3(0.0f, 1.0f, 0.0f));
+    m *= glm::rotate(float(glfwGetTime() / 8.f + (bombPosition.x + bombPosition.z) * 1.5f), glm::vec3(0.0f, 1.0f, 0.0f));
+    auto scaleVec = glm::vec3(1.0f);
+    scaleVec *= std::sin(glfwGetTime() * 9) / 16.0 + 1.0;
+
+    m *= glm::scale(scaleVec);
+
     mvp = p * v * m;
 
     glUniformMatrix4fv(s.findUniformLocation("Model"), 1, GL_FALSE, glm::value_ptr(m));
@@ -370,28 +456,26 @@ void App::render() {
 
   glm::mat4 m {1.0f};
 
-  auto levitatingVector = glm::vec3(0.0f, 0.3f, 0.0f);
+  auto levitatingVector = glm::vec3(0.0f, 0.4f, 0.0f);
   levitatingVector *= glm::sin(3*glfwGetTime());
-  levitatingVector += glm::vec3(0.0f, 0.2f, 0.0f);
+  levitatingVector += glm::vec3(0.0f, 0.7f, 0.0f);
   m *= glm::translate(levitatingVector);
 
   m *= glm::translate(playerPosition);
   m *= glm::rotate(playerDirectionAngle, glm::vec3(0.0f, 1.0f, 0.0f));
-
   mvp = p * v * m;
 
   glUniformMatrix4fv(s.findUniformLocation("Model"), 1, GL_FALSE, glm::value_ptr(m));
   glUniformMatrix4fv(s.findUniformLocation("MVP"), 1, GL_FALSE, glm::value_ptr(mvp));
-
   playerMesh.render(s);
 
   glBindTexture(GL_TEXTURE_2D, flower.texture);
   m = glm::mat4(1.0f);
   m *= glm::rotate(glm::half_pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f));
   mvp = p * v * m;
+
   glUniformMatrix4fv(s.findUniformLocation("Model"), 1, GL_FALSE, glm::value_ptr(m));
   glUniformMatrix4fv(s.findUniformLocation("MVP"), 1, GL_FALSE, glm::value_ptr(mvp));
-
   floor.render(s);
 
 }
@@ -405,15 +489,15 @@ void App::init() {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
 
-  int monitorCount;
-  GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+  monitorCount;
+  monitors = glfwGetMonitors(&monitorCount);
   for(int i = 0; i < monitorCount; i++) {
     GLFWmonitor* monitor = monitors[i];
     printf("Monitor%i: %s\n", i, glfwGetMonitorName(monitor));
   }
 
   auto constexpr SCALING = 32;
-  window = glfwCreateWindow(16 * SCALING, 9 * SCALING, "GLFW1", NULL, NULL);
+  window = glfwCreateWindow(1920, 1080, "GLFW1", NULL, NULL);
   if (!window) {
     glfwTerminate();
     exit(EXIT_FAILURE);
@@ -423,6 +507,8 @@ void App::init() {
   glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_TRUE);
   glfwSetKeyCallback(window, keyCallback);
   glfwSetWindowSizeCallback(window, windowResizeCallback);
+  glfwSetScrollCallback(window, scrollCallback);
+  glfwSetMouseButtonCallback(window, mouseButtonCallback);
 
   glfwMakeContextCurrent(window);
   glfwSwapInterval(1);

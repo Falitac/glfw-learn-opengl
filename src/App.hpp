@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <map>
 #include <array>
+#include <tuple>
 
 #include "Shader.hpp"
 #include "Texture.hpp"
@@ -42,15 +43,26 @@ private:
 	friend void glErrorCallback(int, const char*);
 	friend void keyCallback(GLFWwindow*, int, int, int, int);
 	friend void windowResizeCallback(GLFWwindow*, int, int);
+	friend void scrollCallback(GLFWwindow*, double, double);
+
+  friend void mouseButtonCallback(GLFWwindow*, int, int, int);
+
 
 private:
+  GLFWmonitor** monitors = nullptr;
+  int monitorCount = 0;
+
 	bool isRunning = true;
+	bool isFullScreen = false;
   GLFWwindow* window;
   int width, height;
   float aspectRatio;
   Camera camera;
+  float camRadius = 7.f;
+  float camAngle = 0.4f * glm::half_pi<float>();
 
   std::map<int, bool> pressedKeys;
+  glm::vec2 mouseDiff;
 
 	AssetManager assetManager;
   Shader s;
@@ -62,9 +74,14 @@ private:
   glm::vec3 playerVelocity;
   float playerDirectionAngle = 0.0f;
   float playerChangeAngle = 0.0f;
+  int bombAmount = 200;
+  float bombDestructionTime = 2.0f;
+  float bombCooldown = 0.08f;
+  float bombCooldownTimer = 0.0f;
+  int bombPower = 6;
 
   Mesh bombMesh;
-  std::vector<glm::vec3> bombPositions;
+  std::vector<std::tuple<glm::vec3, float>> bombs;
 
   Mesh cube;
   std::vector<std::vector<int>> grid;

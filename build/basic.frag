@@ -64,7 +64,7 @@ void main() {
 
       diffuse += calculateDiffuse(lightPos, 100.0, color) / squaredDistance;
 
-      specular += calculateSpecular(lightPos, 6.7, color * 1.2);
+      specular += calculateSpecular(lightPos, 6.7 * (1+x*z), color * 1.2);
     }
   }
 

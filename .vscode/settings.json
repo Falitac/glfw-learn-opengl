@@ -48,7 +48,8 @@
     "stdexcept": "cpp",
     "streambuf": "cpp",
     "cinttypes": "cpp",
-    "typeinfo": "cpp"
+    "typeinfo": "cpp",
+    "iostream": "cpp"
   },
   "cpp.creator.headerProtection.useIfnDef": false
 }
