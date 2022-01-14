@@ -46,8 +46,12 @@ void Mesh::load(const std::string& location) {
   Assimp::Importer importer;
   const auto scene = importer.ReadFile(location, aiProcess_Triangulate | aiProcess_FlipUVs);
 
+  if(!scene) {
+    return;
+  }
   if(scene->HasMaterials()) {
-    printf("Materials found!\n");
+    auto name = scene->mMaterials[0]->GetName().C_Str();
+    printf("Material found: %s\n", name);
   }
 
   for(auto i = 0; i < scene->mNumMeshes; i++) {

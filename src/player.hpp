@@ -1,14 +1,8 @@
 #pragma once
 
 #include <glm/glm.hpp>
-#include "Mesh.hpp"
+#include "Entity.hpp"
 
-class Player
-{
-private:
- glm::vec2 position;
- glm::vec2 velocity;
-
+class Player : public Entity {
 public:
-  Mesh model;
 };

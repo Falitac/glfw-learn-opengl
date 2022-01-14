@@ -3,7 +3,7 @@
 App* app;
 
 App::App() {
-    
+  app = this;
 }
 
 void glErrorCallback(int error, const char* description) {
@@ -50,6 +50,15 @@ void checkGLErrors(int line) {
 }
 
 void App::otherInit() {
+  assetManager.addShader("basic", "basic");
+  assetManager.addMesh("assets/obj/robo-boodie.obj", "robot");
+  assetManager.addMesh("assets/obj/bomb.obj", "bomb");
+  assetManager.addMesh("assets/obj/plane.obj", "plane");
+  assetManager.addMesh("assets/obj/cube.obj", "cube");
+
+  assetManager.addTexture("assets/textures/low-poly.png", "low-poly");
+  assetManager.addTexture("assets/textures/flower-texture.jpg", "flower-texture");
+
   s = {"basic"};
 
   playerMesh.load("assets/obj/robo-boodie.obj");
@@ -64,9 +73,17 @@ void App::otherInit() {
   camera.vertAngle() = -glm::quarter_pi<float>();
   camera.horAngle() = -glm::half_pi<float>();
 
-  playerPosition = {0.0f, 0.0f, 0.0f};
+  playerPosition = {5.0f, 0.0f, 5.0f};
 
   grid = std::vector(16, std::vector<int>(33, 0));
+
+  for(int x = 0; x < 16; x++) {
+    for(int z = 0; z < 33; z++) {
+      if( x % 2 == 0 && z % 2 == 0) {
+        grid[x][z] = 1;
+      }
+    }
+  }
 
   for(auto it = grid.begin(); it != grid.end(); it++) {
     if(it == grid.begin() || it + 1 == grid.end()) {
@@ -157,7 +174,7 @@ void App::loop() {
       update();
     }
 
-    glClearColor(37.f / 255.f, 150.f / 255.f, 190.f / 255.f, 1.0f);
+    glClearColor(0.f / 255.f, 0.f / 255.f, 139.f / 255.f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     render();
@@ -170,6 +187,7 @@ void App::loop() {
       std::printf("FPS: %3d TICKS: %3d\n",  frameCounter, tickCounter);
       frameCounter = 0;
       tickCounter = 0;
+      std::printf("%f %f\n", playerPosition.x, playerPosition.z);
     }
     frameCounter++;
   }
@@ -207,21 +225,80 @@ void App::update() {
       playerChangeAngle -=  glm::two_pi<float>();
     }
 
-    playerChangeAngle *= App::dt * 5;
+    playerChangeAngle *= dt * 5;
     playerDirectionAngle += playerChangeAngle;
     tmp = glm::vec3(glm::cos(playerDirectionAngle), 0.0f, -glm::sin(playerDirectionAngle));
     tmp *= dt * maxVelocity;
   }
 
-  playerVelocity *= App::dt;
+  playerVelocity *= dt;
   playerPosition += tmp;
+
+  auto directionVector = [&](const auto& target) {
+    std::array<glm::vec2, 4> compass = {
+        glm::vec2(0.0f, 1.0f),	// up
+        glm::vec2(1.0f, 0.0f),	// right
+        glm::vec2(0.0f, -1.0f),	// down
+        glm::vec2(-1.0f, 0.0f)	// left
+    };
+    float max = 0.0f;
+    unsigned int best_match = -1;
+    for (unsigned int i = 0; i < 4; i++) {
+        float dot_product = glm::dot(glm::normalize(target), compass[i]);
+        if (dot_product > max) {
+            max = dot_product;
+            best_match = i;
+        }
+    }
+    return best_match;
+  };
+
+  auto playerIntersectBox = [&](const auto& boxCenter) {
+    const auto boxSize = 2.0f;
+    const auto playerRadius = 0.8f;
+    glm::vec2 playerCenter = glm::vec2(playerPosition.x, playerPosition.z);
+    glm::vec2 halfBox = glm::vec2(boxSize, boxSize);
+    halfBox /= 2.0f;
+
+    auto diff = playerCenter - boxCenter;
+    auto clamped = glm::clamp(diff, -halfBox, halfBox);
+    auto closest = boxCenter + clamped;
+    diff = closest - playerCenter;
+
+    auto result = glm::dot(diff, diff) <= playerRadius * playerRadius;
+
+    if(result) {
+      auto dir = directionVector(-playerCenter + boxCenter);
+      if(dir == 0 || dir == 2) {
+        auto offset = playerRadius - std::abs(diff.y);
+        if(dir == 0) {
+          playerPosition.z -= offset;
+        } else {
+          playerPosition.z += offset;
+        }
+      } else {
+        auto offset = playerRadius - std::abs(diff.x);
+        if(dir == 1) {
+          playerPosition.x -= offset;
+        } else {
+          playerPosition.x += offset;
+        }
+
+      }
+    }
+
+    return result;
+  };
 
   for(size_t x = 0 ; x < grid.size(); x++) {
     for(size_t z = 0 ; z < grid[x].size(); z++) {
       if(grid[x][z] == 0) {
         continue;
       }
-      auto boxPosition = glm::vec3(x * 2.0f + 1.0f, 0.0f, z * 2.0f + 1.0f);
+      auto boxPosition = glm::vec2(x * 2.0f, z * 2.0f);
+      if(playerIntersectBox(boxPosition)) {
+        //grid[x][z] = 0;
+      }
     }
   }
 }
@@ -229,6 +306,14 @@ void App::update() {
 void App::render() {
   glm::mat4 v, p, mvp;
 
+  constexpr auto camRadius = 25.f;
+  constexpr auto camAngle = 0.7f * glm::half_pi<float>();
+  constexpr auto camHeight = glm::vec3(
+    std::cos(camAngle) * camRadius,
+    std::sin(camAngle) * camRadius,
+    0.0f
+  );
+  auto camPos = camHeight + playerPosition;
   if(projectionSwitch) {
     p = glm::ortho(-aspectRatio, aspectRatio, -1.f, 1.f, 1.f, -1.f);
     v = glm::mat4(1.0f);
@@ -237,13 +322,6 @@ void App::render() {
     p = glm::perspective(1.0f, aspectRatio, 0.5f, 300.0f);
     v = camera.view();
 
-    constexpr auto camRadius = 18.f;
-    constexpr auto camAngle = 0.7f * glm::half_pi<float>();
-    constexpr auto camHeight = glm::vec3(
-      std::cos(camAngle) * camRadius,
-      std::sin(camAngle) * camRadius,
-      0.0f
-    );
     v = glm::lookAt(
       playerPosition + camHeight,
       playerPosition,
@@ -255,6 +333,7 @@ void App::render() {
   glBindTexture(GL_TEXTURE_2D, texture.texture);
   glUniform1f(s.findUniformLocation("time"), glfwGetTime());
   glUniform3fv(s.findUniformLocation("playerPos"), 1, glm::value_ptr(playerPosition));
+  glUniform3fv(s.findUniformLocation("camPos"), 1, glm::value_ptr(camPos));
 
   for(size_t i = 0 ; i < bombPositions.size(); i++) {
 

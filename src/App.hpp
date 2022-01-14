@@ -19,6 +19,7 @@
 #include "Texture.hpp"
 #include "Mesh.hpp"
 #include "Camera.hpp"
+#include "AssetManager.hpp"
 
 class App {
 public:
@@ -50,6 +51,8 @@ private:
   Camera camera;
 
   std::map<int, bool> pressedKeys;
+
+	AssetManager assetManager;
   Shader s;
 
   GLuint texture1;
